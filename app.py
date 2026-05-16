@@ -2,7 +2,7 @@
 Arabic Novel Parser - Streamlit Web Application
 
 A production-ready web app for parsing Arabic novels into structured chapters.
-Supports file upload, processing, preview, and download.
+Supports file upload, text pasting, processing, preview, copy, and download.
 """
 
 import streamlit as st
@@ -55,8 +55,101 @@ def setup_page():
                 margin: 1rem 0;
                 color: #842029;
             }
+            .copy-button {
+                background-color: #0066cc;
+                color: white;
+                padding: 0.75rem 1.5rem;
+                border: none;
+                border-radius: 0.5rem;
+                cursor: pointer;
+                font-weight: bold;
+                font-size: 16px;
+                width: 100%;
+                transition: background-color 0.3s;
+            }
+            .copy-button:hover {
+                background-color: #0052a3;
+            }
         </style>
     """, unsafe_allow_html=True)
+
+
+def process_content(content: str) -> bool:
+    """
+    Process content and store in session state.
+    
+    Args:
+        content: Raw text content to process
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        if not content or not content.strip():
+            st.error("❌ Content is empty. Please enter or upload content with chapters.")
+            return False
+        
+        # Parse chapters
+        chapters = parse_chapters(content)
+        
+        # Validate
+        ChapterParser.validate_chapters(chapters)
+        
+        # Store in session state
+        st.session_state.chapters = chapters
+        st.session_state.raw_content = content
+        st.session_state.processed = True
+        
+        st.success(f"✅ Successfully processed {len(chapters)} chapters!")
+        return True
+        
+    except UnicodeDecodeError:
+        st.error("❌ File encoding error. Please ensure the file is UTF-8 encoded.")
+        return False
+    except ValueError as e:
+        st.error(f"❌ Parsing error: {str(e)}")
+        return False
+    except Exception as e:
+        st.error(f"❌ Unexpected error: {str(e)}")
+        return False
+
+
+def render_copy_button(text: str, label: str = "📋 Copy to Clipboard"):
+    """Render a copy-to-clipboard button using JavaScript."""
+    # Escape special characters for JavaScript
+    escaped_text = text.replace('\\', '\\\\').replace('`', '\\`').replace('\n', '\\n').replace('"', '\\"')
+    
+    button_html = f"""
+    <button onclick="
+        const text = `{escaped_text}`;
+        navigator.clipboard.writeText(text).then(() => {{
+            const btn = event.target;
+            const originalText = btn.textContent;
+            btn.textContent = '✅ Copied!';
+            btn.style.backgroundColor = '#28a745';
+            setTimeout(() => {{
+                btn.textContent = originalText;
+                btn.style.backgroundColor = '#0066cc';
+            }}, 2000);
+        }}).catch(() => {{
+            alert('Failed to copy. Please try manually.');
+        }});
+    " style="
+        background-color: #0066cc;
+        color: white;
+        padding: 0.75rem 1.5rem;
+        border: none;
+        border-radius: 0.5rem;
+        cursor: pointer;
+        font-weight: bold;
+        font-size: 16px;
+        width: 100%;
+        transition: background-color 0.3s;
+    " onmouseover="this.style.backgroundColor='#0052a3'" onmouseout="this.style.backgroundColor='#0066cc'">
+        {label}
+    </button>
+    """
+    st.markdown(button_html, unsafe_allow_html=True)
 
 
 def main():
@@ -65,19 +158,19 @@ def main():
     
     # Header
     st.title("📖 Arabic Novel Parser")
-    st.markdown("Transform your Arabic novels into structured, organized chapters")
+    st.markdown("✨ **Transform your Arabic novels into structured, organized chapters** ✨")
     
     # Sidebar
     with st.sidebar:
         st.header("📋 Information")
         st.markdown("""
-        ### How it works:
-        1. Upload a TXT file with chapters
-        2. Click Process
-        3. Preview results
-        4. Download formatted output
+        ### 🚀 How it works:
+        1. **Upload** a TXT file OR **paste** chapters
+        2. Click **Process**
+        3. **Preview** results
+        4. **Copy** or **Download** formatted output
         
-        ### Expected Format:
+        ### 📝 Expected Format:
         ```
         **الفصل 1: Title Here**
         Content of chapter 1...
@@ -86,65 +179,72 @@ def main():
         Content of chapter 2...
         ```
         
-        ### Features:
+        ### ✨ Features:
+        - ✅ Upload TXT files
+        - ✅ Paste text directly
         - ✅ Automatic chapter detection
         - ✅ UTF-8 Arabic text support
         - ✅ Large file handling (100k+ words)
-        - ✅ Instant download
+        - ✅ **Copy to clipboard**
+        - ✅ Download formatted output
+        - ✅ Real-time statistics
         """)
     
-    # Main content
-    col1, col2 = st.columns([2, 1])
+    # Main content - Input section
+    st.subheader("📤 Input Methods")
     
-    with col1:
-        st.subheader("📤 Upload & Process")
+    # Tabs for upload or paste
+    input_tab1, input_tab2 = st.tabs(["📁 Upload File", "📝 Paste Text"])
+    
+    with input_tab1:
+        st.write("Upload a TXT file containing your chapters")
         uploaded_file = st.file_uploader(
             "Choose a TXT file",
             type=["txt"],
-            help="Select your Arabic novel file"
+            help="Select your Arabic novel file (UTF-8 encoded)",
+            key="file_uploader"
         )
-    
-    # Process button
-    if uploaded_file is not None:
-        with col2:
-            st.write("")  # Vertical spacing
-            process_clicked = st.button(
-                "🔄 Process File",
-                use_container_width=True,
-                key="process_btn"
-            )
         
-        if process_clicked:
-            with st.spinner("Processing your file..."):
-                try:
-                    # Read and decode file
-                    content = uploaded_file.read().decode('utf-8')
-                    
-                    if not content.strip():
-                        st.error("❌ File is empty. Please upload a file with content.")
-                        return
-                    
-                    # Parse chapters
-                    chapters = parse_chapters(content)
-                    
-                    # Validate
-                    ChapterParser.validate_chapters(chapters)
-                    
-                    # Store in session state
-                    st.session_state.chapters = chapters
-                    st.session_state.raw_content = content
-                    st.session_state.processed = True
-                    
-                    st.success(f"✅ Successfully processed {len(chapters)} chapters!")
-                    
-                except UnicodeDecodeError:
-                    st.error(
-                        "❌ File encoding error. Please ensure the file is UTF-8 encoded."
-                    )
-                except ValueError as e:
-                    st.error(f"❌ Parsing error: {str(e)}")
-                except Exception as e:
-                    st.error(f"❌ Unexpected error: {str(e)}")
+        if uploaded_file is not None:
+            col1, col2 = st.columns([3, 1])
+            
+            with col2:
+                if st.button("🔄 Process File", use_container_width=True, key="upload_process"):
+                    with st.spinner("Processing your file..."):
+                        try:
+                            content = uploaded_file.read().decode('utf-8')
+                            process_content(content)
+                        except Exception as e:
+                            st.error(f"❌ Error: {str(e)}")
+            
+            with col1:
+                st.info(f"📄 File: {uploaded_file.name} ({len(uploaded_file.getvalue() / 1024):.1f} KB)")
+    
+    with input_tab2:
+        st.write("Paste your chapters directly")
+        pasted_content = st.text_area(
+            "Paste your chapters here",
+            height=250,
+            placeholder="""**الفصل 1: Title**
+Content here...
+
+**الفصل 2: Another Title**
+More content...""",
+            key="paste_area",
+            help="Paste Arabic novel chapters formatted with **الفصل X: Title**"
+        )
+        
+        col1, col2 = st.columns([3, 1])
+        
+        with col2:
+            if st.button("🔄 Process Text", use_container_width=True, key="paste_process"):
+                with st.spinner("Processing your text..."):
+                    process_content(pasted_content)
+        
+        with col1:
+            if pasted_content:
+                char_count = len(pasted_content)
+                st.info(f"📊 Characters: {char_count:,}")
     
     # Display results if processing completed
     if st.session_state.get("processed", False):
@@ -152,12 +252,13 @@ def main():
         
         chapters = st.session_state.chapters
         
-        # Statistics
+        # Statistics row
+        st.subheader("📊 Statistics")
         stats = get_stats(chapters)
         
         col1, col2, col3, col4 = st.columns(4)
         with col1:
-            st.metric("📊 Chapters Found", stats["chapter_count"])
+            st.metric("📖 Chapters Found", stats["chapter_count"])
         with col2:
             st.metric("📝 Total Words", f"{stats['total_words']:,}")
         with col3:
@@ -168,25 +269,30 @@ def main():
         st.divider()
         
         # Tabs for different views
-        tab1, tab2, tab3 = st.tabs(["📋 Preview", "📄 Chapter List", "⚙️ Details"])
+        tab1, tab2, tab3, tab4 = st.tabs(["📋 Preview", "📄 Chapter List", "⚙️ Details", "💾 Export"])
         
         with tab1:
-            st.subheader("Output Preview")
+            st.subheader("📋 Processed Output Preview")
             
             # Format chapters
             formatted_output = format_chapters(chapters)
             
             # Display with scrollable text area
             st.text_area(
-                "Formatted Output (Read-only)",
+                "Your formatted output",
                 value=formatted_output,
                 height=400,
                 disabled=True,
                 key="preview"
             )
+            
+            # Copy button for preview
+            st.markdown("---")
+            st.write("**Copy this output to use elsewhere:**")
+            render_copy_button(formatted_output, "📋 Copy Formatted Output")
         
         with tab2:
-            st.subheader("Chapters Overview")
+            st.subheader("📄 Chapters Overview")
             
             # Create chapter list
             chapter_data = []
@@ -206,48 +312,52 @@ def main():
             )
         
         with tab3:
-            st.subheader("Processing Details")
+            st.subheader("⚙️ Processing Details")
             
             col1, col2 = st.columns(2)
             
             with col1:
-                st.write("**File Statistics:**")
-                st.write(f"- Total Chapters: {stats['chapter_count']}")
-                st.write(f"- Total Words: {stats['total_words']:,}")
-                st.write(f"- Total Characters: {stats['total_characters']:,}")
-                st.write(f"- Average Words/Chapter: {stats['avg_chapter_words']:.1f}")
+                st.write("**📈 File Statistics:**")
+                st.write(f"- Total Chapters: **{stats['chapter_count']}**")
+                st.write(f"- Total Words: **{stats['total_words']:,}**")
+                st.write(f"- Total Characters: **{stats['total_characters']:,}**")
+                st.write(f"- Average Words/Chapter: **{stats['avg_chapter_words']:.1f}**")
             
             with col2:
-                st.write("**Sample Chapter (First):**")
+                st.write("**🎯 Sample Chapter (First):**")
                 if chapters:
                     first = chapters[0]
                     st.write(f"**Number:** {first['chapter_number']}")
                     st.write(f"**Title:** {first['title']}")
                     st.write(f"**Content Preview:**")
-                    preview = first['content'][:200]
-                    st.write(preview + ("..." if len(first['content']) > 200 else ""))
+                    preview = first['content'][:300]
+                    st.write(preview + ("..." if len(first['content']) > 300 else ""))
         
-        st.divider()
-        
-        # Download section
-        st.subheader("💾 Download Results")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
+        with tab4:
+            st.subheader("💾 Export & Download")
+            
             formatted_output = format_chapters(chapters)
             
+            # Download formatted output
+            st.markdown("#### 📥 Download Formatted Output")
             st.download_button(
-                label="📥 Download Formatted Output (.txt)",
+                label="📥 Download as .txt",
                 data=formatted_output.encode('utf-8'),
-                file_name="novels_processed.txt",
+                file_name="chapters_processed.txt",
                 mime="text/plain",
                 help="Download the processed and formatted chapters",
                 use_container_width=True
             )
-        
-        with col2:
-            # Also offer raw JSON-like format
+            
+            st.markdown("---")
+            
+            st.markdown("#### 📋 Copy to Clipboard")
+            render_copy_button(formatted_output, "📋 Copy All Processed Data")
+            
+            st.markdown("---")
+            
+            # Download metadata
+            st.markdown("#### 📄 Download Metadata")
             json_format = "[\n"
             for ch in chapters:
                 json_format += f"""  {{
@@ -260,23 +370,27 @@ def main():
             json_format = json_format.rstrip(",\n") + "\n]"
             
             st.download_button(
-                label="📥 Download Metadata (.txt)",
+                label="📄 Download Metadata as .txt",
                 data=json_format.encode('utf-8'),
                 file_name="chapters_metadata.txt",
                 mime="text/plain",
-                help="Download metadata about chapters",
+                help="Download chapter metadata and statistics",
                 use_container_width=True
             )
         
+        st.divider()
+        
         # Reset button
-        if st.button("🔄 Reset & Upload New File", use_container_width=True):
-            st.session_state.processed = False
-            st.session_state.chapters = []
-            st.session_state.raw_content = ""
-            st.rerun()
+        col1, col2, col3 = st.columns(3)
+        with col2:
+            if st.button("🔄 Reset & Process New Content", use_container_width=True):
+                st.session_state.processed = False
+                st.session_state.chapters = []
+                st.session_state.raw_content = ""
+                st.rerun()
     
     else:
-        st.info("👆 Upload a TXT file to get started")
+        st.info("👆 Upload a file or paste content above to get started!")
 
 
 if __name__ == "__main__":
