@@ -284,9 +284,7 @@ More content...""",
         with col2:
             if st.button("🔄 Process Text", use_container_width=True, key="paste_process"):
                 with st.spinner("Processing your text..."):
-                    if process_content(pasted_content):
-                        st.session_state.paste_area = ""
-                        st.rerun()
+                    process_content(pasted_content)
         
         with col1:
             if pasted_content:
