@@ -6,6 +6,7 @@ Supports file upload, text pasting, processing, preview, copy, and download.
 """
 
 import streamlit as st
+import streamlit.components.v1 as components
 import io
 import sys
 from pathlib import Path
@@ -115,41 +116,85 @@ def process_content(content: str) -> bool:
 
 
 def render_copy_button(text: str, label: str = "📋 Copy to Clipboard"):
-    """Render a copy-to-clipboard button using JavaScript."""
-    # Escape special characters for JavaScript
-    escaped_text = text.replace('\\', '\\\\').replace('`', '\\`').replace('\n', '\\n').replace('"', '\\"')
-    
+    """Render a copy-to-clipboard button using a Streamlit component."""
+    escaped_text = (
+        text.replace('\\', '\\\\')
+        .replace('`', '\\`')
+        .replace('</script>', '<\\/script>')
+        .replace('</textarea>', '<\\/textarea>')
+    )
+
     button_html = f"""
-    <button onclick="
-        const text = `{escaped_text}`;
-        navigator.clipboard.writeText(text).then(() => {{
-            const btn = event.target;
-            const originalText = btn.textContent;
-            btn.textContent = '✅ Copied!';
-            btn.style.backgroundColor = '#28a745';
-            setTimeout(() => {{
-                btn.textContent = originalText;
-                btn.style.backgroundColor = '#0066cc';
-            }}, 2000);
-        }}).catch(() => {{
-            alert('Failed to copy. Please try manually.');
+    <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+        <button id="copy-btn" style="
+            background-color: #0066cc;
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 16px;
+            width: 100%;
+            transition: background-color 0.3s;
+        ">{label}</button>
+        <div id="copy-status" style="font-size: 0.9rem; min-height: 1.2rem;"></div>
+    </div>
+    <script>
+        const copyButton = document.getElementById('copy-btn');
+        const copyStatus = document.getElementById('copy-status');
+        const originalLabel = copyButton.textContent;
+        const textToCopy = `{escaped_text}`;
+
+        function setStatus(message, color) {{
+            copyStatus.textContent = message;
+            copyStatus.style.color = color;
+        }}
+
+        async function copyText() {{
+            try {{
+                if (navigator.clipboard && window.isSecureContext) {{
+                    await navigator.clipboard.writeText(textToCopy);
+                }} else {{
+                    const textarea = document.createElement('textarea');
+                    textarea.value = textToCopy;
+                    textarea.style.position = 'fixed';
+                    textarea.style.left = '-9999px';
+                    textarea.style.top = '-9999px';
+                    document.body.appendChild(textarea);
+                    textarea.focus();
+                    textarea.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(textarea);
+                }}
+
+                copyButton.textContent = '✅ Copied!';
+                copyButton.style.backgroundColor = '#28a745';
+                setStatus('Copied to clipboard.', '#0f5132');
+
+                setTimeout(() => {{
+                    copyButton.textContent = originalLabel;
+                    copyButton.style.backgroundColor = '#0066cc';
+                    setStatus('', '');
+                }}, 2000);
+            }} catch (error) {{
+                console.error(error);
+                setStatus('Copy failed. Use the download button if needed.', '#842029');
+            }}
+        }}
+
+        copyButton.addEventListener('click', copyText);
+        copyButton.addEventListener('mouseover', () => {{
+            copyButton.style.backgroundColor = '#0052a3';
         }});
-    " style="
-        background-color: #0066cc;
-        color: white;
-        padding: 0.75rem 1.5rem;
-        border: none;
-        border-radius: 0.5rem;
-        cursor: pointer;
-        font-weight: bold;
-        font-size: 16px;
-        width: 100%;
-        transition: background-color 0.3s;
-    " onmouseover="this.style.backgroundColor='#0052a3'" onmouseout="this.style.backgroundColor='#0066cc'">
-        {label}
-    </button>
+        copyButton.addEventListener('mouseout', () => {{
+            if (copyButton.textContent === originalLabel) {{
+                copyButton.style.backgroundColor = '#0066cc';
+            }}
+        }});
+    </script>
     """
-    st.markdown(button_html, unsafe_allow_html=True)
+    components.html(button_html, height=90)
 
 
 def main():
